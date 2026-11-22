@@ -171,25 +171,6 @@ Health check: `GET /actuator/health/liveness` (usado pelo Docker).
 
 Sem as variáveis obrigatórias, o compose se recusa a subir, de propósito.
 
-### Limitações conhecidas
-
-- O bloqueio por tentativas de login fica em memória: com mais de uma instância, use Redis.
-- O PostgreSQL roda num container: para dados importantes, prefira um banco gerenciado
-  (AWS RDS, Google Cloud SQL...), que já inclui backup automático.
-
-## Usando os tokens em outros microsserviços
-
-Os tokens são assinados com **RS256**: a chave privada fica só aqui, e a chave pública
-é publicada em `GET /.well-known/jwks.json`. Outro serviço Spring Boot valida os tokens
-só com configuração (guia completo em [INTEGRACAO.md](INTEGRACAO.md)):
-
-```properties
-spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:8080/.well-known/jwks.json
-spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8080
-spring.security.oauth2.resourceserver.jwt.authorities-claim-name=roles
-spring.security.oauth2.resourceserver.jwt.authority-prefix=ROLE_
-```
-
 ## CI
 
 `.github/workflows/ci.yml` roda os testes e o build da imagem Docker a cada push/PR
