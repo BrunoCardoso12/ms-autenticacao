@@ -1,0 +1,83 @@
+services:
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?defina POSTGRES_DB no .env}
+      DB_USERNAME: ${POSTGRES_USER:?defina POSTGRES_USER no .env}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      # O Docker monta o secret "jwt_private_key" (definido no fim do arquivo) neste caminho
+      JWT_PRIVATE_KEY_LOCATION: file:/run/secrets/jwt_private_key
+      APP_URL: https://${DOMAIN:?defina DOMAIN no .env}
+      MAIL_HOST: ${MAIL_HOST:?defina MAIL_HOST no .env}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:?defina MAIL_USERNAME no .env}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?defina MAIL_PASSWORD no .env}
+      MAIL_FROM: ${MAIL_FROM:?defina MAIL_FROM no .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    secrets:
+      - jwt_private_key
+    # SEM "ports": a aplicação só é acessível pela rede interna do Docker (pelo Caddy)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Limite de memória do container (a JVM usa até 75% disso, configurado no Dockerfile)
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # SEM "ports": o banco NÃO fica acessível de fora do servidor
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Proxy reverso: recebe as requisições da internet e repassa para a aplicação.
+  # Caddy obtém e renova o certificado HTTPS (Let's Encrypt) SOZINHO,
+  # desde que o DOMAIN aponte para este servidor e as portas 80/443 estejam abertas.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro   # ":ro" = somente leitura
+      - caddy-data:/data                      # guarda os certificados
+    depends_on:
+      app:
+        condition: service_healthy            # usa o HEALTHCHECK do Dockerfile
+
+volumes:
+  postgres-data:
+  caddy-data:
+
+# SECRETS: arquivos sensíveis entregues ao container como arquivos (em /run/secrets/<nome>),
+# em vez de variáveis de ambiente. Variáveis de ambiente aparecem em "docker inspect",
+# em logs de erro e são herdadas por subprocessos; arquivos são mais seguros.
+#
+# Gerar a chave (uma vez, no servidor):
+#   mkdir -p secrets && chmod 700 secrets
+#   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/jwt-private.pem
+#   chmod 644 secrets/jwt-private.pem
+# (O 644 deixa o usuário "spring" do container ler o arquivo; quem protege é a PASTA, com 700.)
+secrets:
+  jwt_private_key:
+    file: ./secrets/jwt-private.pem

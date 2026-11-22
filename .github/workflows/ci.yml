@@ -1,0 +1,44 @@
+# =====================================================================
+# CI (Integração Contínua) com GitHub Actions.
+#
+# A cada push ou pull request, o GitHub roda isto automaticamente numa máquina limpa:
+#   1. roda todos os testes
+#   2. se passarem, testa se a imagem Docker é construída
+#
+# Se algo falhar, o commit/PR fica marcado com um X vermelho: o código quebrado
+# é detectado ANTES de chegar em produção.
+# (Só funciona depois que o projeto estiver num repositório no GitHub.)
+# =====================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar o Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven            # reaproveita as dependências entre execuções
+
+      - name: Rodar os testes
+        run: ./mvnw -B test       # -B = modo "batch" (saída limpa, sem animações)
+
+  docker:
+    needs: testes                 # só roda se os testes passarem
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Construir a imagem Docker
+        run: docker build -t autenticacao:${{ github.sha }} .

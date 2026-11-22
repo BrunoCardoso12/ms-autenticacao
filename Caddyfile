@@ -1,0 +1,23 @@
+# Configuração do Caddy (proxy reverso com HTTPS automático).
+#
+# {$DOMAIN} vem da variável de ambiente (ex.: api.meusite.com).
+# Só de colocar o domínio aqui, o Caddy:
+#   - gera e renova o certificado HTTPS (Let's Encrypt)
+#   - redireciona http:// para https://
+{$DOMAIN} {
+	# Repassa tudo para o container "app" na porta 8080 (rede interna do Docker)
+	reverse_proxy app:8080
+
+	# Comprime as respostas (menos dados trafegando)
+	encode gzip
+
+	# Cabeçalhos de segurança recomendados para qualquer API
+	header {
+		# Força o navegador a usar sempre HTTPS neste domínio
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Impede o navegador de "adivinhar" o tipo do conteúdo
+		X-Content-Type-Options "nosniff"
+		# Não revela qual servidor está rodando
+		-Server
+	}
+}

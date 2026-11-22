@@ -1,0 +1,15 @@
+# Arquivos que NÃO devem ser enviados para o build do Docker
+# (deixa o build mais rápido e evita levar lixo para a imagem)
+target/
+.vscode/
+.idea/
+.git/
+*.md
+.env
+.env.*
+Caddyfile
+compose.*.yaml
+compose.yaml
+Dockerfile
+secrets/
+*.pem

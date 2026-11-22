@@ -1,0 +1,52 @@
+services:
+
+  # A nossa aplicação Spring Boot, construída a partir do Dockerfile
+  app:
+    build: .                 # "." = usa o Dockerfile desta pasta
+    ports:
+      - "8080:8080"
+    environment:
+      # Usa o perfil dev (chave JWT e admin de desenvolvimento)...
+      SPRING_PROFILES_ACTIVE: dev
+      # ...mas DENTRO do Docker, "localhost" é o próprio container da aplicação!
+      # Os outros containers são acessados pelo NOME do serviço (postgres, mailpit).
+      # Variáveis de ambiente têm prioridade sobre o application-dev.properties.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/autenticacao
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+    depends_on:
+      postgres:
+        condition: service_healthy   # só sobe a aplicação quando o banco estiver PRONTO
+      mailpit:
+        condition: service_started
+
+  # Banco de dados PostgreSQL
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: autenticacao
+      POSTGRES_USER: autenticacao
+      POSTGRES_PASSWORD: autenticacao
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data   # guarda os dados mesmo se o container for recriado
+    # Healthcheck: o Docker pergunta de tempos em tempos "o banco já aceita conexões?"
+    # É isso que o "condition: service_healthy" da aplicação espera.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autenticacao -d autenticacao"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Mailpit: servidor de email FALSO para desenvolvimento.
+  # Ele "recebe" todos os emails que a aplicação envia, sem mandar nada para a internet.
+  # Veja os emails em: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"   # SMTP (a aplicação envia por aqui)
+      - "8025:8025"   # interface web (você lê os emails por aqui)
+
+volumes:
+  postgres-data:
